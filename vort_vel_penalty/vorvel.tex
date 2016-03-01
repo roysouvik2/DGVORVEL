@@ -1,0 +1,642 @@
+\documentclass[11pt]{article}
+\usepackage[marginratio=1:1,
+height=550pt,width=500pt,tmargin=70pt, bottom=60pt]{geometry}
+
+\usepackage{amsthm}
+\usepackage[utf8x]{inputenc}
+\usepackage{amssymb}
+\usepackage{nccmath}
+\usepackage{textcomp}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage[pdftex]{graphicx}
+\usepackage{subfigure}
+\usepackage{array}
+\newcommand{\head}[2]{\multicolumn{1}{>{\centering\arraybackslash}p{#1}|}{\textbf{#2}}}
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+\newtheorem{theorem}{Theorem}[section] 
+\newtheorem{definition}{Definition}[section]
+\newtheorem{lemma}{Lemma}[section]
+\newtheorem{corollary}{Corollary}[section]
+\newtheorem{property}{Property}[section]
+\newtheorem{remark}{Remark}[section]
+\newtheorem{example}{Example}[section]
+\graphicspath{{./figures/}}
+
+
+\begin{document}
+\title{Discontinuous Galerkin Scheme for Vorticity-Velocity Formulation of incompressible Euler Flow. }
+\author{  Praveen Chandrashekar and Souvik Roy}
+%\address{TIFR Center for Applicable Mathematics, Bangalore-560065, India}
+%\ead{(vasu,praveen,souvik)@math.tifrbng.res.in}
+
+
+\maketitle
+
+\section{Introduction}
+
+\par Euler equations are a set of equations which govern inviscid flows. These equations are non-linear in nature and represent wave flows. 
+A way of solving the incompressible Euler equations is to use the vorticity-velocity framework. The flow dynamics is given by the vorticity equation, which is a 
+transport equation while the kinematics part represented by the velocity is given by a Laplace equation, which has stability. Such a framework 
+is useful for solving vortex dominated flows where we want to capture the information of the vortices. Also numerically, we can deal with boundary 
+conditions more efficiently than in the case of velocity-pressure and velocity-streamfunction formulations. But the major difference between the vorticity-velocity formulation and the vorticity-streamfunction formulation is that in the latter case the numerical velocity is obtained using the streamfunction and, hence, is automatically incompressible whereas in the former case we cannot assert that the numerical velocity is divergence free. Thus, we use a penalty formulation to solve the Laplace equation, so that the incompressibility constraint is almost satisfied.
+
+The vorticity equation, being a transport equation, has  discontinuous solutions, in general. Thus a discontinuous galerkin scheme with complete upwind flux is used to solve the vorticity equation. We also show energy stability of the scheme. For the velocity, continuous Lagrange finite elements are used.
+
+\section{Vorticity-Velocity Formulation} 
+ The incompressible 2D time dependent Euler equations in vorticity-velocity
+formulation is given by:
+\begin{equation}\label{vor}
+\begin{aligned}
+&\omega_t + \bf{U}\cdot\nabla{\omega}=0\\
+&\omega({\bf{x}},0)=\omega_0(\bf{x})\\
+\end{aligned}
+\end{equation}
+\begin{equation}\label{vel}
+\begin{aligned}
+&\Delta{\bf{U}}=-\nabla\times\omega\\
+\end{aligned}
+\end{equation}
+\begin{equation}\label{cons}
+\begin{aligned}
+& \nabla\cdot{\bf{U}}=0\\
+&\nabla\times{\bf{U}} = \omega
+\end{aligned}
+\end{equation}
+where $\omega$ and ${\bf{U}}$ represent the vorticity and velocity of the flow respectively.
+For vorticity equation, we incorporate a inflow boundary condition given by 
+$$
+\omega = \omega_{in}, \quad \textbf{x}\in\partial\Omega_-
+$$
+where $\partial\Omega_-$ is the inflow boundary given as 
+$$
+\partial\Omega_-=\lbrace \textbf{x}\in\partial\Omega\ni\textbf{U}\cdot n < 0\rbrace
+$$
+where $n$ is the unit normal on the boundary of $\Omega$.\\
+For velocity equation we use the Dirichlet Boundary Conditions
+i.e.
+$$
+{\bf{U}}=0, \quad \textbf{x}\in\partial\Omega
+$$
+\section{Discontinuous Galerkin Element Formulation}
+We would now want to solve the equations using finite element method.
+ The boundary condition pose the main difficulties in solving the equations.
+ To overcome that, we will use Discontinuous Galerkin Finite Elements to solve the vorticity equation 
+ as it is an explicit method and hence there is no global 
+matrix inversion. Also stability and energy conservation is maintained.
+\par We do not need a compatibility condition for different finite element spaces used: one for the vorticity 
+$\omega$ and the other for the streamfunction $\psi$. The normal velocity $\textbf{U}\cdot{n}$ is continuous 
+across the element boundary and hence use of correct upwind flux is possible maintaining the stability.
+\subsection{Vorticity Equation}
+Let us define the space of piecewise polynomials on a mesh $\tau_h$
+$$
+V_h^k=\lbrace v\in L^2(\Omega):V|_K\in\mathbb{P}_k\quad\forall K\in\tau_h\rbrace
+$$
+For the Euler equations , we rewrite the momentum equation in conservative form as:
+$$
+\omega_t+\nabla\cdot(\omega{\bf{U}})=0
+$$
+
+We multiply by a function $v\in L^2(\Omega)$ with supp$(v)=K$ and integrate by parts
+$$
+\int_K\omega_t{v}+\int_{\partial{K}}({\bf{U}}.n)\omega{v}-\int_K\omega({\bf{U}}.\nabla{v})=0
+$$
+We consider the upwind flux to approximate the convective term:
+\[
+  H(\omega_+,\omega_-) = 
+  \left\{ 
+  \begin{array}{l l}
+    {\bf{U}}\omega_+ &  \text{if $({\bf{U}}.n)\geq 0$ }\\
+    {\bf{U}}\omega_- &  \text{if $({\bf{U}}.n)< 0$ }\\
+  \end{array} \right.
+\]
+
+Then the DG scheme in $K$ is given as
+\begin{equation}\label{sds}
+\int_K\omega_t^h{v}+\int_{\partial{K}}H(\omega_+^h,\omega_-^h)\cdot{n}v^h-\int_K\omega^h({{\bf{U}}}.\nabla{v^h})=0,\qquad\forall v^h \in V_h^k
+\end{equation}
+
+Incorporating the boundary conditions and adding the equation for all elements we get
+\begin{equation}
+\begin{aligned}
+\displaystyle{\sum_{K\in\tau_h}}\int_K\omega_t^h{v}
+&-\displaystyle{\sum_{K\in\tau_h}}\int_K\omega^h({{\bf{U}}}.\nabla{v^h})
++\displaystyle{\sum_{e\in\Gamma_I}}\int_e H(\omega_+^h,\omega_-^h)\cdot{n}\text{\textlbrackdbl{$v^h$}\textrbrackdbl}\\
+&+\int_{\Gamma_-}H(\omega_+^h,\omega_{in})\cdot{n}
++\int_{\Gamma_+}(({\bf{U}}.n)\omega^h{v^h})=0
+\end{aligned}
+\end{equation}
+Thus the DG scheme can be written as: Find $\omega_h\in V_h^k$ such that
+\begin{equation}\label{vor1}
+\begin{aligned}
+\int_\Omega\omega_t^h{v}
+&-\int_\Omega\omega^h({{\bf{U}}}.\nabla{v^h})
++\displaystyle{\sum_{e\in\Gamma_I}}\int_e H(\omega_+^h,\omega_-^h)\cdot{n}\text{\textlbrackdbl{$v^h$}\textrbrackdbl}\\
+&+\int_{\Gamma_-}H(\omega_+^h,\omega_{in})\cdot{n}
++\int_{\Gamma_+}(({\bf{U}}.n)\omega^h{v^h})=0, \qquad\forall v^h \in V_h^k
+\end{aligned}
+\end{equation}
+where $\Gamma_I$ represents the interior edges, $\Gamma_-$ represents the inflow boundary given by:
+$$ \lbrace\textbf{x}\in\partial{\Omega}:{\bf{U}}.n(\textbf{x})<0\rbrace
+$$
+and $\Gamma_+$ represents the outflow boundary.\\
+
+
+\subsection{Velocity Equation}
+
+We now come to the velocity equation given by (\ref{vel}).The velocity equation has an equivalent minimization formulation
+given by:
+$$
+J(\textbf{U}) = \frac{1}{2}\int_\Omega|\nabla\textbf{U}|^2 -\int_\Omega(\nabla\times\omega)\cdot\textbf{U}
+$$
+We now have to incorporate the constraints given in (\ref{cons}). We use the penalty method to introduce the constraints
+and so we assume that the constraints (\ref{cons}) are satisfied approximately. So the new functional to be minimized is
+given by 
+$$
+\widetilde{J} = J + \frac{\alpha}{2}\int_\Omega(\nabla\cdot\textbf{U})^2 + \frac{\beta}{2}\int_\Omega(\nabla\times\textbf{U}-\omega)^2
+$$
+The minimizing PDE in weak form is given by:\\
+Find $\textbf{U}\in H_0^1(\Omega)$ such that
+\begin{equation}
+\int_\Omega\nabla\textbf{U}\cdot\nabla\textbf{V} -\int_\Omega(\nabla\times\omega)\cdot\textbf{V}
++\alpha\int_\Omega(\nabla\cdot\textbf{U})\cdot(\nabla\cdot\textbf{V}) +\beta\int_\Omega(\nabla\times\textbf{U}
+-\omega)\cdot(\nabla\times\textbf{V})=0
+\end{equation}
+\hspace{130mm}$\forall \textbf{V} \in H^1_0(\Omega)$.\\\\
+As $\omega\in L^2(\Omega)$ so we do an integration by parts on the second term to get:
+\begin{equation}\label{vel1}
+\int_\Omega\nabla\textbf{U}\cdot\nabla\textbf{V} +\int_\Omega\omega(\nabla^\bot\textbf{V})
++\alpha\int_\Omega(\nabla\cdot\textbf{U})(\nabla\cdot\textbf{V}) +\beta\int_\Omega(\nabla\times\textbf{U}
+-\omega)\cdot(\nabla\times\textbf{V})=0
+\end{equation}
+where $\nabla^\bot = (-\partial{y}, \partial{x})$.
+We define the space
+\begin{equation}\label{space}
+W_{0,h}^k = V_h^k \cap C_0(\Omega),
+\end{equation}
+the bilinear form 
+\begin{equation}\label{bilinear_form}
+A(\textbf{U},\textbf{V}) = \int_\Omega\nabla\textbf{U}\cdot\nabla\textbf{V}
++\alpha\int_\Omega(\nabla\cdot\textbf{U})(\nabla\cdot\textbf{V}) +\beta\int_\Omega(\nabla\times\textbf{U})
+\cdot(\nabla\times\textbf{V})
+\end{equation}
+and the linear form
+\begin{equation}\label{linear_form}
+F(\omega,\textbf{V}) = (\beta-1)\int_\Omega \omega\cdot(\nabla\times \textbf{V}).
+\end{equation}
+Then the discrete scheme for (\ref{vel1}) is given as follows: Find $\textbf{U}_h \in (W_{0,h}^k)^2$, such that
+\begin{equation}\label{vel_scheme}
+A(\textbf{U}_h,\textbf{V}_h)= F(\omega_h,\textbf{V}_h),
+\end{equation}
+for all $\textbf{V}_h \in (W_{0,h}^k)^2$.
+\section{Stability Analysis}
+\subsection{Stability Analysis of the DG scheme}
+\begin{theorem}
+The solution $\omega^h$ to the semi-discrete DG scheme (\ref{vor1}) satisfies the following energy inequality
+\begin{equation}\label{cellener}
+\frac{d}{dt} \int_\Omega (\omega^h)^2 \leq 0
+\end{equation}
+for some consistent entropy flux $F$.
+
+\end{theorem}
+\begin{proof}
+ Let 
+ $$
+ B_K(\omega^h, v^h) = \int_K\omega_t{v}+\int_{\partial{K}}H(\omega_+^h,\omega_-^h)\cdot{n}v^h-\int_K\omega^h({{\bf{U}}}.\nabla{v^h})
+ $$
+ Let $\omega^h=v_h$. We then get
+ $$
+  B_K(\omega^h, \omega^h) = \int_K\omega_t{\omega^h}+\int_{\partial{K}}H(\omega_+^h,\omega_-^h)\cdot{n}\omega^h-\int_K\omega^h({{\bf{U}}}.\nabla{\omega^h})=0
+ $$
+ Let $F1(\omega^h) = (\int_0^{\omega^h}s{u_h}~ds,\int_0^{\omega^h}s{v_h}~ds)$, where $\textbf{U}_h=(u_h,v_h)$.
+ Then we obtain
+ \begin{equation}
+  \begin{aligned}
+    &\int_K\omega_t{\omega^h}+\int_{\partial{K}}H(\omega_+^h,\omega_-^h)\cdot{n}\omega^h-\int_K\nabla\cdot{F1(\omega^h)}=0\\
+    \Rightarrow &\int_K\omega_t{\omega^h}+\int_{\partial{K}}H(\omega_+^h,\omega_-^h)\cdot{n}\omega^h-\int_{\partial{K}}F1(\omega^h)\cdot{n}=0\\
+  \end{aligned}
+ \end{equation}
+Let
+\begin{equation*}
+ \begin{aligned}
+ F(\omega_+^h,\omega_-^h) = H(\omega_+^h,\omega_-^h)\omega^h-F1(\omega^h).
+\end{aligned}
+\end{equation*}
+This implies
+\begin{equation*}
+ \begin{aligned}
+ \frac{1}{2}\frac{d}{dt}\int_K(\omega^h)^2 +\int_{\partial{K}}F(\omega_+^h,\omega_-^h)=0.
+\end{aligned}
+\end{equation*}
+Summing up over all triangles $K$, we get
+\begin{equation*}
+ \begin{aligned}
+ &\frac{1}{2}\frac{d}{dt}\sum_K\int_K(\omega^h)^2 + \sum_K\int_{\partial{K}}F(\omega_+^h,\omega_-^h)=0.
+\end{aligned}
+\end{equation*}
+Thus,
+\begin{equation}\label{en}
+ \begin{aligned}
+\frac{1}{2}\frac{d}{dt}\int_\Omega(\omega^h)^2 +\sum_K R_K =0.
+ \end{aligned}
+\end{equation}
+If we can show that $\sum_K R_K \geq 0$ we are done. To achieve this we note that  $\sum_K R_K$ contains
+2 sums, the outer sum is over the cells and the inner sum is over the edges. We interchange the 2 sums to get
+\begin{equation}
+ \begin{aligned}
+  \sum_K R_K &= \sum_e \int_e \lbrace H(\omega_+^h,\omega_-^h)(\omega^h_+-\omega^h_-) - (F1(\omega^h_+)-F1(\omega^h_-))\rbrace\cdot n_e\\
+  &=\sum_e \int_e \lbrace H(\omega_+^h,\omega_-^h)(\omega^h_+-\omega^h_-) - \int_{\omega^h_-}^{\omega^h_+}s\textbf{U}ds\rbrace\cdot n_e
+ \end{aligned}
+\end{equation}
+
+Now 
+$$
+H(\omega_+^h,\omega_-^h)(\omega^h_+-\omega^h_-)\cdot n_e = \left({\int_{\omega^h_-}^{\omega^h_+}s\textbf{U}ds}\right) \cdot n_e- \left({(\omega^h_+)^2 - (\omega^h_-)^2}\right)<Mn_e, n_e>
+$$
+where $M$ is the positive definite matrix given by 
+$$
+M = \frac{1}{2} |\textbf{U}\cdot{n_e}|Id
+$$
+where $Id$ is the $2\times2$ identity matrix. So we have $\sum_K R_K \geq 0$ and hence from (\ref{en}) we have 
+$$
+\frac{d}{dt} \int_\Omega (\omega^h)^2 \leq 0
+$$
+\end{proof}
+\subsection{Stability Analysis of the Velocity Scheme}
+\begin{theorem} 
+ The solution ${\textbf{U}_h}$ to (\ref{vel_scheme}) satisfies the following estimate:
+ $$
+ \|{\textbf{U}_h}\|_1 \leq C\|\omega^h\|_0
+ $$
+ where $\|.\|_0$ is the $L^2$ norm and $\|.\|_1$ is the $H^1$ norm.
+\end{theorem}
+\begin{proof}
+Substituting ${\textbf{V}_h}={\textbf{U}_h}$ in (\ref{vel_scheme}), we have the following
+\begin{equation*}
+\begin{aligned}
+\int_\Omega|\nabla\textbf{U}_h|^2\leq|(\beta-1)|\|\omega^h\|_0\|{\textbf{U}_h}\|_1
+\mbox{ (By Cauchy-Schwarz inequality)}.\\
+\end{aligned}
+\end{equation*}
+Hence, 
+$$
+ \|{\textbf{U}_h}\|_1 \leq C\|\omega^h\|_0.
+ $$
+\end{proof}
+\section{Error Estimates}
+In this section, we derive some error estimates on the discrete solution $(\omega^h, \textbf{U}_h)$. The following theorem holds.
+
+\begin{theorem}[$H^1$ error estimate]
+The solution error $\textbf{U}-\textbf{U}_h$ satisfies the following $H^1$ error estimate 
+$$
+\|\textbf{U}-\textbf{U}_h\|_1 \leq E h^{k},
+$$
+for $\beta \geq \dfrac{1}{2}$.
+\end{theorem}
+
+\begin{proof}
+We define the following
+\begin{equation}\label{notations}
+\begin{aligned}
+&e_u = \textbf{U}-\textbf{U}_h,\qquad e_{\omega} = \omega-\omega_h\\
+&\eta_u = \textbf{U}-P(\textbf{U}),\qquad \xi_u = \textbf{U}_h-P(\textbf{U}),
+\end{aligned}
+\end{equation}
+where $P: (H^1_0(\Omega))^2\rightarrow (W_{0,h}^k)^2$ is the projection operator and $W_{0,h}^k)$ is defined as in (\ref{space}).
+Then we have $\xi_u\in H^1_0(\Omega)$. Since $\textbf{U}$ and $\textbf{U}_h$ satisfy (\ref{vel1}), the following holds for all $\textbf{V} \in (W_{0,h}^k)^2$
+\begin{equation}\label{vel_eq1}
+A(\textbf{U},\textbf{V})= F(\omega, \textbf{V}),
+\end{equation}
+and
+\begin{equation}\label{vel_eq2}
+A(\textbf{U}_h,\textbf{V})= F(\omega_h,\textbf{V}).
+\end{equation}
+Subtracting (\ref{vel_eq2}) from (\ref{vel_eq1}), we get
+\begin{equation}\label{vel_eq_diff}
+A(e_u,\textbf{V})= F(e_\omega,\textbf{V}).
+\end{equation}
+Let $\textbf{V} =\xi_u$. Then (\ref{vel_eq_diff}) gives 
+\begin{equation*}
+A(e_u,\xi_u)= F(e_\omega,\xi_u).
+\end{equation*}
+But $ e_u  = \eta_u-\xi_u$. Thus, we have the following
+\begin{equation*}
+\begin{aligned}
+A(\eta_u-\xi_u,\xi_u)= F(e_\omega,\xi_u).
+\end{aligned}
+\end{equation*}
+This implies
+\begin{equation}\label{err_vel1}
+\begin{aligned}
+A(\xi_u,\xi_u)= A(\eta_u,\xi_u)-F(e_\omega,\xi_u).
+\end{aligned}
+\end{equation}
+The right hand side of (\ref{err_vel1}) can be given as follows
+\begin{equation*}
+\begin{aligned}
+&A(\eta_u,\xi_u)-F(e_\omega,\xi_u)\\
+& =\sum_{K}\left({\int_K \nabla\eta_u\cdot\nabla\xi_u+(1-\beta)\int_Ke_\omega\cdot(\nabla^\bot \xi_u))}\right)
++ \sum_{K}\left({\alpha\int_K(\nabla\cdot\eta_u)(\nabla\cdot\xi_u)+\beta\int_K(\nabla^\bot\eta_u)(\nabla^\bot\xi_u)}\right)\\
+ &\leq \sum_K \dfrac{1}{2}\left({\int_K |\nabla \eta_u|^2 +\int_K |\nabla \xi_u|^2 }\right)+ \left|{\dfrac{1-\beta}{2}}\right|\left({\int_K |e_\omega|^2+\int_K |\nabla^\bot \xi_u|^2}\right)\\
+&+\sum_K \dfrac{\alpha}{2}\left({\int_K |\nabla\cdot \eta_u|^2+\int_K |\nabla\cdot \xi_u|^2}\right)+\dfrac{\beta}{2} \left({\int_K |\nabla^\bot \eta_u|^2+\int_K |\nabla^\bot \xi_u|^2}\right).
+\end{aligned}
+\end{equation*}
+If $\dfrac{1}{2}\leq\beta <1$, (\ref{err_vel1}) can be written as
+\begin{equation*}
+\begin{aligned}
+A(\xi_u,\xi_u)=&\sum_{K}\left({
+\dfrac{1}{2}\int_K |\nabla\xi_u|^2 + \dfrac{\alpha}{2} \int_K |\nabla\cdot \xi_u|^2 + \left({\beta-\dfrac{1}{2}}\right) \int_K |\nabla^\bot \xi_u|^2}\right)\\
+\leq &\sum_K \dfrac{1}{2}\int_K |\nabla \eta_u|^2 + \dfrac{1-\beta}{2}\int_K |e_\omega|^2+\dfrac{\alpha}{2}\int_K |\nabla\cdot \eta_u|^2+\dfrac{\beta}{2}\int_K |\nabla^\bot \eta_u|^2\\
+\end{aligned}
+\end{equation*}
+If $1\leq\beta $, (\ref{err_vel1}) can be written as
+\begin{equation*}
+\begin{aligned}
+A(\xi_u,\xi_u)=&\sum_{K}\left({
+\dfrac{1}{2}\int_K |\nabla\xi_u|^2 + \dfrac{\alpha}{2} \int_K |\nabla\cdot \xi_u|^2 + \dfrac{1}{2} \int_K |\nabla^\bot \xi_u|^2}\right)\\
+\leq &\sum_K \dfrac{1}{2}\int_K |\nabla \eta_u|^2 + \dfrac{\beta-1}{2}\int_K |e_\omega|^2+\dfrac{\alpha}{2}\int_K |\nabla\cdot \eta_u|^2+\dfrac{\beta}{2}\int_K |\nabla^\bot \eta_u|^2\\
+\end{aligned}
+\end{equation*}
+Thus, we have the following
+\begin{equation*}
+\begin{aligned}
+&\dfrac{\alpha}{2} \sum_{K}\int_K |\nabla\cdot \xi_u|^2
+\leq
+Ch^{2k} + D \|e_\omega\|^2, \qquad \beta \geq \dfrac{1}{2}.
+\end{aligned}
+\end{equation*}
+Hence 
+\begin{equation}\label{err_div}
+\begin{aligned}
+&\|\nabla\cdot \textbf{U}_h-\nabla\cdot \lbrace P(\textbf{U})\rbrace\|^2
+\leq
+C_1 h^{2k} + D_1 \|e_\omega\|^2
+\end{aligned}
+\end{equation}
+Similarly, 
+\begin{equation*}
+\begin{aligned}
+&\dfrac{1}{2} \sum_{K}\int_K |\nabla \xi_u|^2
+\leq
+Ch^{2k} + D \|e_\omega\|^2, \qquad \beta \geq \dfrac{1}{2}.
+\end{aligned}
+\end{equation*}
+As $\textbf{U}_h- P(\textbf{U})\in H^1_0(\Omega)$, by Poincar\'e inequality, we have
+\begin{equation}\label{err_vel_1}
+\begin{aligned}
+&\|\textbf{U}_h-P(\textbf{U})\|_1^2
+\leq
+C_1 h^{2k} + D_1 \|e_\omega\|^2.
+\end{aligned}
+\end{equation}
+It has been shown in \cite{Liu_Shu} that $\|e_\omega\| \leq D_2 h^k$. Thus, we have the following
+\begin{equation}\label{err_vel2}
+\begin{aligned}
+&\|\textbf{U}_h-P(\textbf{U})\|_1 \leq C_2 h^{k}.
+\end{aligned}
+\end{equation}
+Combining (\ref{err_vel2}) with the interpolation error estimate for $\eta_u$, we have the following
+\begin{equation}\label{err_vel}
+\begin{aligned}
+&\|\textbf{U}-\textbf{U}_h\|_1 \leq E h^{k},
+\end{aligned}
+\end{equation} 
+which gives the desired result.
+\end{proof}
+
+We now derive error estimates for the $L^2$ norm of the error using the Aubin-Nitsche duality argument.
+
+\begin{theorem}[$L^2$ error estimate]
+The solution error $\textbf{U}-\textbf{U}_h$ satisfies the following $L^2$ error estimate 
+$$
+\|\textbf{U}-\textbf{U}_h\|_0 \leq F h^{k+1},
+$$
+for $\beta \geq \dfrac{1}{2}$.
+\end{theorem}
+\begin{proof}
+We first show that the bilinear form $A(\textbf{U},\textbf{V})$, defined as in (\ref{bilinear_form}), is symmetric, continuous and coercive in $H^1$ norm. The bilinear form $A(\textbf{U},\textbf{V})$ is given as 
+$$
+A(\textbf{U},\textbf{V})=\int_\Omega\nabla\textbf{U}\cdot\nabla\textbf{V}
++\alpha\int_\Omega(\nabla\cdot\textbf{U})(\nabla\cdot\textbf{V}) +\beta\int_\Omega(\nabla\times\textbf{U})
+\cdot(\nabla\times\textbf{V}).
+$$
+It is an immediate consequence that $A(\textbf{U},\textbf{V})=A(\textbf{V},\textbf{U})$, which implies that $A(\textbf{U},\textbf{V})$ is symmetric. Using Holder's inequality, it can be easily seen that 
+$$
+|A(\textbf{U},\textbf{V})| \leq K \|\textbf{U}\|_1\|\textbf{V}\|_1,
+$$
+where $K=1+\alpha+\beta$. For showing coercivity, we first note that
+$$
+A(\textbf{U},\textbf{U}) \geq \int_\Omega|\nabla\textbf{U}|^2.
+$$
+Using Poincar\'{e}'s inequality, we have the following
+$$
+A(\textbf{U},\textbf{U}) \geq \|\textbf{U}\|_1^2,
+$$
+which gives us the desired result.
+
+ We now consider the dual problem 
+\begin{equation}\label{dual}
+A(\textbf{W},\textbf{V}) = \int_\Omega (\textbf{U}-\textbf{U}_h)\textbf{V}.
+\end{equation}
+By $H^2$ regularity, there exists an unique solution $\textbf{W}\in H^2(\Omega)\cap H^1_0(\Omega)$ of the problem (\ref{dual}), for all $\textbf{V}\in H^1_0(\Omega)$ and 
+\begin{equation}\label{estimate_H2}
+\|\textbf{W}\|_2 \leq C_3 \|\textbf{U}-\textbf{U}_h\|_0.
+\end{equation}
+Choosing $\textbf{V}= \textbf{U}-\textbf{U}_h$ in (\ref{dual}), we have the following
+\begin{equation}
+\begin{aligned}
+\|\textbf{U}-\textbf{U}_h\|_0^2 &= A(\textbf{W},\textbf{U}-\textbf{U}_h)\\
+&= A(\textbf{W}-P\textbf{W},\textbf{U}-\textbf{U}_h), \qquad \mbox{ (by orthogonality)}\\
+&\leq \|\nabla (\textbf{W}-P \textbf{W})\|\|\textbf{U}-\textbf{U}_h\|_1,\\
+&\leq h\|\textbf{W}\|_2 E h^k , \qquad (\mbox{ for } \beta \geq \dfrac{1}{2} \mbox{ using } (\ref{err_vel}))\\
+&\leq F h^{k+1} \|\textbf{U}-\textbf{U}_h\|_0. \qquad \mbox{ (using (\ref{estimate_H2}))}
+\end{aligned}
+\end{equation}
+Thus we have the following 
+\begin{equation}\label{err_vel_L2}
+\|\textbf{U}-\textbf{U}_h\|_0 \leq F h^{k+1},
+\end{equation}
+for $\beta \geq \dfrac{1}{2}$, which gives the desired result.
+\end{proof}
+\section{Numerical Algorithm and Test Cases}
+\subsection{Decoupled set-up}
+
+We will solve the equations (\ref{vor1}), (\ref{vel1}) in a decoupled way. So the first step
+requires us to discretize the semi-discrete time dependent 
+vorticity equation (\ref{vor1}) in time. For this we use the BDF second order scheme. 
+\subsection{BDF Scheme}
+BDF Schemes belong to the family of linear multistep methods. Suppose we are to solve the following ODE:-
+$$
+w' = F(w,t)
+$$
+Then a linear k-step nethod is defined by the formula:
+$$
+\sum^k_{j=0}\alpha_jw_{n+j}  = \Delta{t}\sum^k_{j=0}\beta_jF(t_{n+j},w_{n+j})
+$$
+A k-step BDF formula is an implicit one and is obtained from the above by putting:
+$$
+\beta_j = \left\{ 
+  \begin{array}{l l}
+    0 & \quad \text{if $0\leq j\leq k-1$ }\\
+    1 & \quad \text{if $j=k$}
+  \end{array} \right.
+$$
+
+The $\alpha_j$'s are chosen such that the order of the scheme is k.
+When k = 1, the BDF method becomes the implicit Euler. The 2 step BDF is defined as follows:
+$$
+\frac{3}{2}w_{n+2} - 2w_{n+1} + \frac{1}{2}w_{n+1} = \Delta{t}F_{n+2}
+$$
+\subsection{Algorithm for solving the vorticity-velocity equations}
+
+As the 2-step BDF requires values of previous two states, to solve the equations (\ref{vor1}), (\ref{vel_scheme}) in a decoupled way we have the following algorithm:
+\begin{enumerate}
+ \item $\omega_0$ is given to us. We will find out $\textbf{U}_h^0$ using the value of $\omega_0$ from (\ref{vel_scheme}),
+ i.e by solving
+ $$
+ A(\textbf{U}^0_h,\textbf{V}_h)=F(\omega_0,\textbf{V}_h).
+ $$
+ \item Next we determine $\omega^1_h$ from equation (\ref{vor1}) by replacing $\omega_t$ with the implicit Euler scheme. 
+Thus we solve the following equation
+ $$
+ \int_\Omega\frac{\omega^1_h-\omega_0}{\Delta{t}}{v^h}
+-\int_\Omega\omega^1_h({{\bf{U}}_0}.\nabla{v^h})
++\displaystyle{\sum_{e\in\Gamma_I}}\int_e H(\omega^{1+}_h,\omega^{1-}_h)\cdot{n}\text{\textlbrackdbl{$v^h$}\textrbrackdbl}\\
++\int_{\Gamma_-}H(\omega^{1+}_h,\omega_{in})\cdot{n}
++\int_{\Gamma_+}(({\bf{U}}_0.n)\omega^1_h{v^h})=0
+$$
+\item We then determine ${\bf{U}}_h^1$ from (\ref{vel1}) using the value of $\omega^1_h$, i.e by solving
+$$
+A(\textbf{U}^1_h,\textbf{V}_h)=F(\omega_h^1,\textbf{V}_h).
+$$
+\item Now with the values of $\omega_0$ and $\omega^1_h$, we use the 2-step BDF method to determine $\omega_h^2$ using equation (\ref{vor1}). The main aim of using 2-step BDF is to get a second 
+order accuracy in time. But as the scheme is implicit, so we have to use the value of ${\bf{U}}^2_h$ in the equation.
+But we only have values of ${\bf{U}}^0_h$ and ${\bf{U}}^1_h$. Thus we use an interpolation method to determine
+${\bf{U}}^2_h$ in terms of the previous states of ${\bf{U}}^h$ in such a way that we obtain second order accuracy in time.
+
+Let $n$ be the current state and let $\widetilde{{\bf{U}}}_n$ = $c{\bf{U}}_{n-1}$ + $d{\bf{U}}_{n-2}$, where 
+${\bf{U}}_n$ = ${\bf{U}}(t_n)$ and $\widetilde{{\bf{U}}}_n$ is the approximated value of ${\bf{U}}_n$. \\
+By Taylor Series Expansion we have
+$$
+\widetilde{{\bf{U}}}_n = c\left[{\bf{U}}(t_n)-\Delta{\bf{U}}^{'}(t_n) + O((\Delta{t})^2)\right]
+           + d\left[{\bf{U}}(t_n)-2\Delta{\bf{U}}^{'}(t_n) + O((\Delta{t})^2)\right]
+$$
+To have second order accuracy we need $ c+d = 1$ and $ c+2d = 0$. This gives $c=2, d=-1$. Thus,
+$$
+\widetilde{{\bf{U}}}_n = 2{\bf{U}}_{n-1} - {\bf{U}}_{n-2}
+$$
+Thus we obtain $\omega_2$ by solving
+\begin{equation}
+\begin{aligned}
+& \int_\Omega\frac{\frac{3}{2}\omega^2_h-2\omega^1_h+\frac{1}{2}\omega_0}{\Delta{t}}{v^h}
+-\int_\Omega\omega^2_h(\widetilde{{\bf{U}}}^2_h.\nabla{v^h})
++\displaystyle{\sum_{e\in\Gamma_I}}\int_e H(\omega^{2+}_h,\omega^{2-}_h)\cdot{n}\text{\textlbrackdbl{$v^h$}\textrbrackdbl}\\
+&+\int_{\Gamma_-}H(\omega^{2+}_h,\omega_{in})\cdot{n}
++\int_{\Gamma_+}((\widetilde{{\bf{U}}}^2_h.n)\omega^2_h{v^h})=0\\
+\end{aligned}
+\end{equation}
+\item Next we determine ${\bf{U}}^2_h$ by solving
+$$
+A(\textbf{U}^2_h,\textbf{V}_h)=F(\omega_2,\textbf{V}_h).
+$$
+\item We repeat steps 4 and 5 to determine $\omega^n_h$ and ${\bf{U}}^n_h$ for subsequent times $t_n$.
+\end{enumerate}
+\subsection{Accuracy test}
+For validating accuracy estimates, we consider a 2D Perelman compact vortex \cite{Perelman, strain}, with support inside a disk of radius $r$. Let $A=\dfrac{x^2+y^2}{r^2}$. The radially symmetric initial vorticity distribution is given as follows
+\[
+\omega_0(x,y)=
+\begin{cases}
+(1-A)^7, &\qquad A \leq 1,\\
+0, &\qquad A >1.\\
+\end{cases}
+\]
+The corresponding velocity field is given by 
+\[
+\textbf{U}(x,y,t) = f(A)(y,-x),
+\]
+where 
+\[
+f(A) = 
+\begin{cases}
+-\dfrac{1}{16A}(1-(1-A)^8), &\qquad A \leq 1,\\
+-\dfrac{1}{16A}, &\qquad A > 1.\\
+\end{cases}
+\]
+This is a stationary radial solution of the Euler equations with shear. A complete rotation occurs at time $T=32\pi$. We choose $r=0.5$ and domain $\Omega$ as the unit open disk. We use $P^1$ elements for the schemes (\ref{vor1}) and (\ref{vel_scheme}). The penalty parameters $\alpha$ and $\beta$, given in (\ref{vel1}), are chosen to be 1. We consider the time interval $[0,1]$, for our computations. 
+
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c| c| c|}
+\hline
+$N_x$ & Relative $L^2$ Error & Order of convergence\\ [0.5ex]
+\hline
+8 & 1.47e-1 & -- \\
+16 & 5.84e-2 & 1.33\\
+32 & 1.61e-2 & 1.86 \\
+64 & 4.67e-3 & 1.78\\
+128 & 1.48e-3 & 1.66\\[1ex]
+\hline
+\end{tabular}
+\caption{Relative $L^2$ errors and order of convergence of the vorticity approximations	 }
+\label{Table_vorticity}
+\end{table} 
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c| c| c|}
+\hline
+$N_x$ & Relative $L^2$ Error & Order of convergence\\ [0.5ex]
+\hline
+8 & 1.44e-1 & -- \\
+16 & 4.34e-2 & 1.73\\
+32 & 1.18e-2 & 1.88 \\
+64 & 3.01e-3 & 1.97\\
+128 & 7.56e-4 & 1.99\\[1ex]
+\hline
+\end{tabular}
+\caption{Relative $L^2$ errors and order of convergence of the velocity approximations	 }
+\label{Table_velocity}
+\end{table} 
+
+Table \ref{Table_vorticity} and \ref{Table_velocity} shows the relative $L^2$ error and the order of convergence for the vorticity and velocity approximations obtained through the numerical schemes (\ref{vor1}) and (\ref{vel_scheme}) respectively. We see a second order convergence, which is expected due to smooth vortex and velocity fields.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c| c| c|}
+\hline
+$N_x$ & Relative $L^2$ Error & Order of convergence\\ [0.5ex]
+\hline
+8 & 1.30e-2 & -- \\
+16 & 5.37e-3 & 1.28\\
+32 & 1.81e-3 & 1.57 \\
+64 & 5.35e-4 & 1.76\\
+128 & 1.48e-4 & 1.86\\[1ex]
+\hline
+\end{tabular}
+\caption{Order of convergence of divergence errors}
+\label{Table_divergence}
+\end{table} 
+
+Table \ref{Table_divergence} shows the divergence errors in velocity. We see that the divergence errors converge with a rate of almost two, implying that the incompressibility constraint is well satisfied.
+
+\subsubsection{Results}
+
+
+
+
+
+
+\begin{thebibliography}{99}
+\bibitem{Liu_Shu} J--G. Liu and C--W. Shu, A higher order discontinuous Galerkin method for 2D incompressible flows, \textsl{Journal of Computational Physics}, 160:577--596, 2000.
+
+\bibitem{Perelman} M. Perelman, On the accuracy of vortex methods, \textsl{Journal of Computational Physics}, 59:200--223, 1985.
+
+\bibitem{strain} J. A. Strain, Fast vortex methods, \textsl{Proceedings of the 1996 ASME Fluids Engineering Division Summer Meeting, San Diego, California,} July 1996.
+
+
+
+
+\end{thebibliography}
+
+\end{document}
